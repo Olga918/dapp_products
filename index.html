@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Products DApp</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 24px; }
+        input, button { margin: 4px 0; padding: 6px; }
+        table { border-collapse: collapse; margin-top: 16px; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }
+        img { max-width: 80px; max-height: 80px; }
+        form { display: flex; flex-direction: column; max-width: 420px; }
+    </style>
+</head>
+<body>
+    <h1>Products</h1>
+
+    <h2>Створити продукт</h2>
+    <form id="create_form">
+        <input id="name" placeholder="Назва" required>
+        <input id="description" placeholder="Опис" required>
+        <input id="price" type="number" min="0" placeholder="Ціна" required>
+        <input id="imageUrl" placeholder="URL картинки" required>
+        <button type="submit">Створити</button>
+    </form>
+    <p id="status"></p>
+
+    <h2>Список продуктів</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Назва</th>
+                <th>Опис</th>
+                <th>Адреса акаунта</th>
+                <th>Дата створення</th>
+                <th>Картинка</th>
+            </tr>
+        </thead>
+        <tbody id="products"></tbody>
+    </table>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js"></script>
+    <script>
+        const contract_address = "";
+
+        const abi = [
+            "function createProduct(string name, string description, uint price, string imageUrl) external",
+            "function getProducts() view returns (tuple(string name, string description, uint price, address creator, uint createdAt, string imageUrl)[])"
+        ];
+
+        const getContract = async (withSigner) => {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            await provider.send("eth_requestAccounts", []);
+            if (withSigner) {
+                const signer = await provider.getSigner();
+                return new ethers.Contract(contract_address, abi, signer);
+            }
+            return new ethers.Contract(contract_address, abi, provider);
+        };
+
+        const loadProducts = async () => {
+            const contract = await getContract(false);
+            const items = await contract.getProducts();
+            const tbody = document.getElementById("products");
+            tbody.innerHTML = "";
+            items.forEach((p) => {
+                const tr = document.createElement("tr");
+                const date = new Date(Number(p.createdAt) * 1000).toLocaleString();
+                tr.innerHTML =
+                    "<td>" + p.name + "</td>" +
+                    "<td>" + p.description + "</td>" +
+                    "<td>" + p.creator + "</td>" +
+                    "<td>" + date + "</td>" +
+                    "<td><img src=\"" + p.imageUrl + "\" alt=\"" + p.name + "\"></td>";
+                tbody.appendChild(tr);
+            });
+        };
+
+        document.getElementById("create_form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const status = document.getElementById("status");
+            try {
+                const contract = await getContract(true);
+                const tx = await contract.createProduct(
+                    document.getElementById("name").value,
+                    document.getElementById("description").value,
+                    document.getElementById("price").value,
+                    document.getElementById("imageUrl").value
+                );
+                status.textContent = "Чекаємо транзакцію...";
+                await tx.wait();
+                status.textContent = "Продукт створено";
+                await loadProducts();
+            } catch (err) {
+                status.textContent = err.message;
+            }
+        });
+
+        document.addEventListener("DOMContentLoaded", () => {
+            if (!window.ethereum) {
+                alert("Please install web3 provider (Metamask https://metamask.io/)");
+                return;
+            }
+            if (!contract_address) {
+                document.getElementById("status").textContent =
+                    "Встав адресу контракту в contract_address після деплою";
+                return;
+            }
+            loadProducts();
+        });
+    </script>
+</body>
+</html>
